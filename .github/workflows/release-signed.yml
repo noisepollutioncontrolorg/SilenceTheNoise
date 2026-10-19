@@ -1,0 +1,109 @@
+name: Build and publish signed APK
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag_name:
+        description: 'Release tag (for example v5.0)'
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    env:
+      RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag_name || github.ref_name }}
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v6
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Android SDK tools
+        uses: android-actions/setup-android@v4
+
+      - name: Install Android SDK 34 packages
+        run: sdkmanager "platforms;android-34" "build-tools;34.0.0"
+
+      - name: Set up Gradle 8.2
+        uses: gradle/actions/setup-gradle@v6
+        with:
+          gradle-version: '8.2'
+          cache-provider: basic
+
+      - name: Validate release tag
+        shell: bash
+        run: |
+          if [[ ! "$RELEASE_TAG" =~ ^v[0-9]+(\.[0-9]+){1,2}$ ]]; then
+            echo "::error::Use a tag such as v5.0 or v5.0.1. Received: $RELEASE_TAG"
+            exit 1
+          fi
+
+      - name: Decode private signing key
+        shell: bash
+        env:
+          STN_KEYSTORE_BASE64: ${{ secrets.STN_KEYSTORE_BASE64 }}
+          STN_KEYSTORE_PASSWORD: ${{ secrets.STN_KEYSTORE_PASSWORD }}
+          STN_KEY_ALIAS: ${{ secrets.STN_KEY_ALIAS }}
+          STN_KEY_PASSWORD: ${{ secrets.STN_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          if [[ -z "$STN_KEYSTORE_BASE64" || -z "$STN_KEYSTORE_PASSWORD" || -z "$STN_KEY_ALIAS" || -z "$STN_KEY_PASSWORD" ]]; then
+            echo "::error::One or more signing secrets are missing. Add all four STN_* secrets in repository Settings > Secrets and variables > Actions."
+            exit 1
+          fi
+          printf '%s' "$STN_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/stn-release-key.jks"
+          test -s "$RUNNER_TEMP/stn-release-key.jks"
+
+      - name: Build signed release APK
+        env:
+          STN_KEYSTORE_PATH: ${{ runner.temp }}/stn-release-key.jks
+          STN_KEYSTORE_PASSWORD: ${{ secrets.STN_KEYSTORE_PASSWORD }}
+          STN_KEY_ALIAS: ${{ secrets.STN_KEY_ALIAS }}
+          STN_KEY_PASSWORD: ${{ secrets.STN_KEY_PASSWORD }}
+        run: gradle --no-daemon :app:assembleRelease
+
+      - name: Prepare APK and checksum
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK_PATH="app/build/outputs/apk/release/app-release.apk"
+          if [[ ! -f "$APK_PATH" ]]; then
+            echo "::error::Release APK not found at $APK_PATH"
+            exit 1
+          fi
+          mkdir -p dist
+          cp "$APK_PATH" dist/SilenceTheNoise.apk
+          (cd dist && sha256sum SilenceTheNoise.apk > SilenceTheNoise.apk.sha256)
+
+      - name: Publish APK on GitHub Releases
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            gh release upload "$RELEASE_TAG" dist/SilenceTheNoise.apk dist/SilenceTheNoise.apk.sha256 --clobber
+          else
+            gh release create "$RELEASE_TAG" \
+              dist/SilenceTheNoise.apk \
+              dist/SilenceTheNoise.apk.sha256 \
+              --title "SILENCEtheNOISE.in $RELEASE_TAG" \
+              --notes "Signed Android APK for SILENCEtheNOISE.in. Verify the SHA-256 checksum before installation." \
+              --target "$GITHUB_SHA"
+          fi
+
+      - name: Remove temporary signing key
+        if: always()
+        run: rm -f "$RUNNER_TEMP/stn-release-key.jks"
