@@ -140,7 +140,7 @@ public class MainActivity extends AppCompatActivity {
         String aboutText = "SILENCEtheNOISE.in features noise pollution awareness, complaint support, legal resources, a dB(A) meter, campaign updates, a media gallery, and citizen participation tools to promote a quieter and healthier Kerala.\n\n" +
                 "In a democracy, sovereignty belongs to the people.\n\n" +
                 "A violation continues only as long as it goes unquestioned. Change begins the moment someone asks.\n\n" +
-                "Don't ask, "Why complain?"\nAsk, "Is the law being followed?" Is there permission? Are the legal limits met? Was action taken? If not, ask why, and ask again.\n\n" +
+                "Don't ask, 'Why complain?'\nAsk, 'Is the law being followed?' Is there permission? Are the legal limits met? Was action taken? If not, ask why, and ask again.\n\n" +
                 "One complaint may not change everything, but persistent questions and documented complaints ensure accountability. When the finger points at the complainant, learn to point it back at the authorities responsible for enforcing the law.\n\n" +
                 "A complaint is not a nuisance.\nIt is a citizen's democratic right.\n\n" +
                 "Are you ready to question noise pollution, lawfully?\n\n" +
@@ -151,7 +151,7 @@ public class MainActivity extends AppCompatActivity {
 
         new AlertDialog.Builder(this)
                 .setTitle("About - SILENCEtheNOISE.in")
-                .setMessage(aboutText.replace("\\n", "\n"))
+                .setMessage(aboutText)
                 .setPositiveButton("OK", null)
                 .setNeutralButton("Visit Website", (dialog, which) -> {
                     Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse("https://silencethenoise.in/"));
