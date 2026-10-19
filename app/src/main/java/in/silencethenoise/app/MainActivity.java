@@ -3,9 +3,11 @@ package in.silencethenoise.app;
 import android.Manifest;
 import android.content.Intent;
 import android.content.pm.PackageManager;
+import android.graphics.Bitmap;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
+import android.view.View;
 import android.webkit.GeolocationPermissions;
 import android.webkit.PermissionRequest;
 import android.webkit.ValueCallback;
@@ -14,6 +16,8 @@ import android.webkit.WebResourceRequest;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
+import android.widget.ImageView;
+import android.widget.ProgressBar;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
@@ -22,16 +26,29 @@ import java.util.List;
 
 public class MainActivity extends AppCompatActivity {
     private WebView myWebView;
+    private ProgressBar progressBar;
     private ValueCallback<Uri[]> mUploadMessage;
     private final static int FILECHOOSER_RESULTCODE = 1;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        myWebView = new WebView(this);
-        setContentView(myWebView);
+        setContentView(R.layout.activity_main);
 
         checkAndRequestPermissions();
+
+        myWebView = findViewById(R.id.webview);
+        progressBar = findViewById(R.id.progressBar);
+        ImageView btnRefresh = findViewById(R.id.btnRefresh);
+
+        btnRefresh.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                if (myWebView != null) {
+                    myWebView.reload();
+                }
+            }
+        });
 
         WebSettings webSettings = myWebView.getSettings();
         webSettings.setJavaScriptEnabled(true);
@@ -51,15 +68,38 @@ public class MainActivity extends AppCompatActivity {
                 } else {
                     try {
                         startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(url)));
-                    } catch (Exception e) {
-                        // Ignore if no app can handle the intent
-                    }
+                    } catch (Exception e) {}
                     return true;
                 }
+            }
+
+            @Override
+            public void onPageStarted(WebView view, String url, Bitmap favicon) {
+                super.onPageStarted(view, url, favicon);
+                if (progressBar != null) progressBar.setVisibility(View.VISIBLE);
+            }
+
+            @Override
+            public void onPageFinished(WebView view, String url) {
+                super.onPageFinished(view, url);
+                if (progressBar != null) progressBar.setVisibility(View.GONE);
             }
         });
 
         myWebView.setWebChromeClient(new WebChromeClient() {
+            @Override
+            public void onProgressChanged(WebView view, int newProgress) {
+                super.onProgressChanged(view, newProgress);
+                if (progressBar != null) {
+                    if (newProgress == 100) {
+                        progressBar.setVisibility(View.GONE);
+                    } else {
+                        progressBar.setVisibility(View.VISIBLE);
+                        progressBar.setProgress(newProgress);
+                    }
+                }
+            }
+
             @Override
             public void onGeolocationPermissionsShowPrompt(String origin, GeolocationPermissions.Callback callback) {
                 callback.invoke(origin, true, false);
@@ -72,9 +112,7 @@ public class MainActivity extends AppCompatActivity {
 
             @Override
             public boolean onShowFileChooser(WebView webView, ValueCallback<Uri[]> filePathCallback, FileChooserParams fileChooserParams) {
-                if (mUploadMessage != null) {
-                    mUploadMessage.onReceiveValue(null);
-                }
+                if (mUploadMessage != null) mUploadMessage.onReceiveValue(null);
                 mUploadMessage = filePathCallback;
                 try {
                     startActivityForResult(fileChooserParams.createIntent(), FILECHOOSER_RESULTCODE);
