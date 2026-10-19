@@ -2,6 +2,10 @@ plugins {
     id 'com.android.application'
 }
 
+// Release signing details are supplied securely by GitHub Actions environment variables.
+def signingEnvNames = ['STN_KEYSTORE_PATH', 'STN_KEYSTORE_PASSWORD', 'STN_KEY_ALIAS', 'STN_KEY_PASSWORD']
+def releaseSigningReady = signingEnvNames.every { System.getenv(it) }
+
 android {
     namespace 'in.silencethenoise.app'
     compileSdk 34
@@ -13,9 +17,23 @@ android {
         versionCode 5
         versionName "5.0"
     }
+    signingConfigs {
+        if (releaseSigningReady) {
+            release {
+                storeFile file(System.getenv('STN_KEYSTORE_PATH'))
+                storePassword System.getenv('STN_KEYSTORE_PASSWORD')
+                keyAlias System.getenv('STN_KEY_ALIAS')
+                keyPassword System.getenv('STN_KEY_PASSWORD')
+            }
+        }
+    }
+
     buildTypes {
         release {
             minifyEnabled false
+            if (releaseSigningReady) {
+                signingConfig signingConfigs.release
+            }
         }
     }
     compileOptions {
